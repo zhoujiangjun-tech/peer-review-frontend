@@ -22,6 +22,7 @@ import { assignmentApi, submissionApi } from '../../api/index.js';
 import { palette } from '../../theme.js';
 import StatusTag from '../../components/StatusTag.jsx';
 import EmptyState from '../../components/EmptyState.jsx';
+import useResponsive from '../../hooks/useResponsive.js';
 import dayjs from 'dayjs';
 
 const { Dragger } = Upload;
@@ -44,6 +45,7 @@ function formatSize(b) {
 
 export default function StudentAssignments() {
   const { message } = AntApp.useApp();
+  const { isMobile } = useResponsive();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [mineMap, setMineMap] = useState({});
