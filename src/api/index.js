@@ -1,16 +1,5 @@
-/**
- * api/index.js
- * axios 实例 + 全部后端接口封装
- *
- * - baseURL = '/api'，由 Vite dev 代理到 http://localhost:3000
- * - 拦截器自动注入 Authorization；401 时清理本地 token
- *
- * 字段约定（与后端 routes/* 保持一致）：
- *   classes:      class_name / invite_code / teacher_id
- *   assignments:  class_id / title / description / submit_deadline / review_deadline
- *   progress:     status / total_submissions / total_tasks / completed_reviews / pending_reviews
- *   review task:  task_id / assignment_id / submission_id / anonymous_id / completed / score / comment
- */
+// api/index.js - axios instance + backend API wrapper
+// baseURL is the Railway backend; interceptor injects Bearer token; 401 clears token
 
 import axios from 'axios';
 
@@ -36,14 +25,14 @@ const http = axios.create({
 
 http.interceptors.request.use((cfg) => {
   const t = getToken();
-  if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  if (t) cfg.headers.Authorization = 'Bearer ' + t;
   return cfg;
 });
 
 http.interceptors.response.use(
   (r) => r,
   (err) => {
-    if (err.response?.status === 401) clearAuth();
+    if (err.response && err.response.status === 401) clearAuth();
     return Promise.reject(err);
   }
 );
@@ -60,15 +49,14 @@ export const authApi = {
 // ============ Classes ============
 export const classApi = {
   list:    ()     => ok(http.get('/classes')),
-  create:  (body) => ok(http.post('/classes', body)),         // { class_name }
-  join:    (body) => ok(http.post('/classes/join', body)),    // { invite_code, student_no }
-  members: (id)   => ok(http.get(`/classes/${id}/members`))
+  create:  (body) => ok(http.post('/classes', body)),
+  join:    (body) => ok(http.post('/classes/join', body)),
+  members: (id)   => ok(http.get('/classes/' + id + '/members'))
 };
 
 // ============ Assignments ============
 export const assignmentApi = {
   list:        ()     => ok(http.get('/assignments')),
-  // body: { class_id, title, description?, submit_deadline?, review_deadline?, attachment? }
   create:      (body) => {
     const fd = new FormData();
     fd.append('class_id', body.class_id);
@@ -79,31 +67,32 @@ export const assignmentApi = {
     if (body.attachment)      fd.append('attachment', body.attachment);
     return ok(http.post('/assignments', fd, { headers: { 'Content-Type': 'multipart/form-data' } }));
   },
-  get:         (id)   => ok(http.get(`/assignments/${id}`)),
-  distribute:  (id)   => ok(http.post(`/assignments/${id}/distribute`)),
-  progress:    (id)   => ok(http.get(`/assignments/${id}/progress')),
-  // 拿到授权的 blob URL（供 <img src> / <iframe src> 使用）
-  async getAttachmentPreviewUrl(id) {
-    const res = await http.get(`/assignments/${id}/attachment`, { responseType: 'blob' });
-    return URL.createObjectURL(res.data);
+  get:         (id)   => ok(http.get('/assignments/' + id)),
+  distribute:  (id)   => ok(http.post('/assignments/' + id + '/distribute')),
+  progress:    (id)   => ok(http.get('/assignments/' + id + '/progress')),
+  getAttachmentPreviewUrl(id) {
+    const path = '/assignments/' + id + '/attachment';
+    return http.get(path, { responseType: 'blob' })
+      .then((res) => URL.createObjectURL(res.data));
   },
-  // 触发下载附件（保留后端返回的原始文件名）
-  async downloadAttachment(id, fallbackName = 'file') {
-    const res = await http.get(`/assignments/${id}/attachment`, { responseType: 'blob' });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fallbackName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadAttachment(id, fallbackName) {
+    const path = '/assignments/' + id + '/attachment';
+    return http.get(path, { responseType: 'blob' })
+      .then((res) => {
+        const url = URL.createObjectURL(res.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fallbackName || 'file';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
   }
 };
 
 // ============ Submissions ============
 export const submissionApi = {
-  // body: { assignment_id, content?, file? }  - file 是原始 File 对象
   submit:  (body) => {
     const fd = new FormData();
     fd.append('assignment_id', body.assignment_id);
@@ -111,38 +100,39 @@ export const submissionApi = {
     if (body.file)    fd.append('file', body.file);
     return ok(http.post('/submissions', fd, { headers: { 'Content-Type': 'multipart/form-data' } }));
   },
-  mine:    (assignmentId)=> ok(http.get('/submissions/mine', { params: { assignmentId } })),
-  listAll: (assignmentId)=> ok(http.get('/submissions',     { params: { assignmentId } })),   // 教师
-  // 修改提交：{ content?, file? }
+  mine:    (assignmentId) => ok(http.get('/submissions/mine', { params: { assignmentId } })),
+  listAll: (assignmentId) => ok(http.get('/submissions',     { params: { assignmentId } })),
   update:  (id, body) => {
     const fd = new FormData();
     if (body.content !== undefined && body.content !== null) fd.append('content', body.content);
     if (body.file) fd.append('file', body.file);
-    return ok(http.put(`/submissions/${id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }));
+    return ok(http.put('/submissions/' + id, fd, { headers: { 'Content-Type': 'multipart/form-data' } }));
   },
-  // 拿到一个授权的 blob URL（供 <img src> / <iframe src> 使用），组件在卸载时调用 revoke
-  async getPreviewUrl(id) {
-    const res = await http.get(`/submissions/file/${id}`, { responseType: 'blob' });
-    return URL.createObjectURL(res.data);
+  getPreviewUrl(id) {
+    const path = '/submissions/file/' + id;
+    return http.get(path, { responseType: 'blob' })
+      .then((res) => URL.createObjectURL(res.data));
   },
-  // 触发下载（保留后端返回的原始文件名）
-  async download(id, fallbackName = 'file') {
-    const res = await http.get(`/submissions/file/${id}`, { responseType: 'blob' });
-    const url = URL.createObjectURL(res.data);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fallbackName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  download(id, fallbackName) {
+    const path = '/submissions/file/' + id;
+    return http.get(path, { responseType: 'blob' })
+      .then((res) => {
+        const url = URL.createObjectURL(res.data);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fallbackName || 'file';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
   }
 };
 
 // ============ Reviews ============
 export const reviewApi = {
   myTasks:        (aid) => ok(http.get('/reviews/tasks/my', { params: { assignmentId: aid } })),
-  taskSubmission: (tid) => ok(http.get(`/reviews/tasks/${tid}/submission`)),
-  submit:         (body)=> ok(http.post('/reviews', body)),                      // { task_id, score, comment }
-  listAll:        (aid) => ok(http.get('/reviews/all',     { params: { assignmentId: aid } }))   // 教师
+  taskSubmission: (tid) => ok(http.get('/reviews/tasks/' + tid + '/submission')),
+  submit:         (body)=> ok(http.post('/reviews', body)),
+  listAll:        (aid) => ok(http.get('/reviews/all',     { params: { assignmentId: aid } }))
 };
