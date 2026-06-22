@@ -3,7 +3,7 @@
  * axios 实例 + 全部后端接口封装
  *
  * - baseURL = '/api'，由 Vite dev 代理到 http://localhost:3000
- * - 拦截器自动注入 Authorization，401 时清理本地 token
+ * - 拦截器自动注入 Authorization；401 时清理本地 token
  *
  * 字段约定（与后端 routes/* 保持一致）：
  *   classes:      class_name / invite_code / teacher_id
@@ -30,7 +30,7 @@ export const getStoredUser = () => {
 export const setStoredUser = (u) => localStorage.setItem(USER_KEY, JSON.stringify(u));
 
 const http = axios.create({
-  baseURL: '/api',
+  baseURL: 'https://peer-review-backend-production-bca4.up.railway.app/api',
   timeout: 15000
 });
 
@@ -81,13 +81,13 @@ export const assignmentApi = {
   },
   get:         (id)   => ok(http.get(`/assignments/${id}`)),
   distribute:  (id)   => ok(http.post(`/assignments/${id}/distribute`)),
-  progress:    (id)   => ok(http.get(`/assignments/${id}/progress`)),
-  // 拿到鉴权 blob URL（用于 <img src> <iframe src>）
+  progress:    (id)   => ok(http.get(`/assignments/${id}/progress')),
+  // 拿到授权的 blob URL（供 <img src> / <iframe src> 使用）
   async getAttachmentPreviewUrl(id) {
     const res = await http.get(`/assignments/${id}/attachment`, { responseType: 'blob' });
     return URL.createObjectURL(res.data);
   },
-  // 下载附件（保留后端返回的原文件名）
+  // 触发下载附件（保留后端返回的原始文件名）
   async downloadAttachment(id, fallbackName = 'file') {
     const res = await http.get(`/assignments/${id}/attachment`, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data);
@@ -103,13 +103,12 @@ export const assignmentApi = {
 
 // ============ Submissions ============
 export const submissionApi = {
-  // body: { assignment_id, content?, file? }  - file 是原生 File 对象
+  // body: { assignment_id, content?, file? }  - file 是原始 File 对象
   submit:  (body) => {
     const fd = new FormData();
     fd.append('assignment_id', body.assignment_id);
     if (body.content) fd.append('content', body.content);
     if (body.file)    fd.append('file', body.file);
-    // 上传时不要手动设置 Content-Type，让浏览器自动加 boundary
     return ok(http.post('/submissions', fd, { headers: { 'Content-Type': 'multipart/form-data' } }));
   },
   mine:    (assignmentId)=> ok(http.get('/submissions/mine', { params: { assignmentId } })),
@@ -121,12 +120,12 @@ export const submissionApi = {
     if (body.file) fd.append('file', body.file);
     return ok(http.put(`/submissions/${id}`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }));
   },
-  // 拿到一个鉴权的 blob URL（用于 <img src> <iframe src>），组件卸载时调用 revoke
+  // 拿到一个授权的 blob URL（供 <img src> / <iframe src> 使用），组件在卸载时调用 revoke
   async getPreviewUrl(id) {
     const res = await http.get(`/submissions/file/${id}`, { responseType: 'blob' });
     return URL.createObjectURL(res.data);
   },
-  // 触发下载（保留后端返回的原文件名）
+  // 触发下载（保留后端返回的原始文件名）
   async download(id, fallbackName = 'file') {
     const res = await http.get(`/submissions/file/${id}`, { responseType: 'blob' });
     const url = URL.createObjectURL(res.data);
@@ -144,6 +143,6 @@ export const submissionApi = {
 export const reviewApi = {
   myTasks:        (aid) => ok(http.get('/reviews/tasks/my', { params: { assignmentId: aid } })),
   taskSubmission: (tid) => ok(http.get(`/reviews/tasks/${tid}/submission`)),
-  submit:         (body)=> ok(http.post('/reviews', body)),                     // { task_id, score, comment }
+  submit:         (body)=> ok(http.post('/reviews', body)),                      // { task_id, score, comment }
   listAll:        (aid) => ok(http.get('/reviews/all',     { params: { assignmentId: aid } }))   // 教师
 };
