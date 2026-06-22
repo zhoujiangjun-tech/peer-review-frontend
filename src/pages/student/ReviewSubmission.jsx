@@ -1,12 +1,7 @@
 /**
  * pages/student/ReviewSubmission.jsx
- * 学生：提交评审
- *   - 显示作业内容（仅匿名 ID）
- *   - 文件区：可点击下载，图片/PDF 自动内联预览
- *   - 评分滑杆 + 文本评语
- *   - 提交后跳回首页
+ * Student: submit a peer review for an assigned (anonymous) submission.
  */
-
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, Slider, Input, Button, App as AntApp, Spin, Divider, Result, Tag, Tooltip } from 'antd';
@@ -29,18 +24,12 @@ function fileIcon(name) {
   return <FileTextOutlined />;
 }
 
-function isImage(name) {
-  return !!name && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
-}
-function isPdf(name) {
-  return !!name && /\.pdf$/i.test(name);
-}
+function isImage(name) { return !!name && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name); }
+function isPdf(name) { return !!name && /\.pdf$/i.test(name); }
 function isTextLike(name) {
   return !!name && /\.(txt|md|json|xml|ya?ml|csv|html|css|js|ts|jsx|tsx|py|java|c|cpp|h|hpp|go|rs|rb|php|sh|sql|log)$/i.test(name);
 }
-function isDocx(name) {
-  return !!name && /\.docx?$/i.test(name);
-}
+function isDocx(name) { return !!name && /\.docx?$/i.test(name); }
 
 export default function ReviewSubmission() {
   const { taskId } = useParams();
@@ -54,9 +43,8 @@ export default function ReviewSubmission() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
-  // 预览
-  const [previewUrl, setPreviewUrl] = useState(null);   // blob URL
-  const [previewKind, setPreviewKind] = useState(null); // 'image' | 'pdf' | 'text' | null
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewKind, setPreviewKind] = useState(null);
   const [previewText, setPreviewText] = useState('');
   const [previewing, setPreviewing] = useState(false);
   const previewUrlRef = useRef(null);
@@ -74,7 +62,6 @@ export default function ReviewSubmission() {
     })();
   }, [taskId, message]);
 
-  // 卸载时清理 blob URL
   useEffect(() => () => {
     if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
@@ -87,7 +74,6 @@ export default function ReviewSubmission() {
     if (!submissionId) return;
     setPreviewing(true);
     try {
-      // 1) docx 走后端 mammoth 转 HTML
       if (isDocx(task.file_name)) {
         const r = await fetch(`/api/submissions/file/${submissionId}?format=html`, {
           headers: { Authorization: `Bearer ${getAuthToken()}` }
@@ -99,18 +85,16 @@ export default function ReviewSubmission() {
         setPreviewUrl(null);
         return;
       }
-      // 2) 文本/代码类直接拿字符串
       if (isTextLike(task.file_name) && !isImage(task.file_name)) {
         const res = await fetch(`/api/submissions/file/${submissionId}`, {
           headers: { Authorization: `Bearer ${getAuthToken()}` }
         });
         const text = await res.text();
-        setPreviewText(text.slice(0, 20000) + (text.length > 20000 ? '\n\n... (已截断)' : ''));
+        setPreviewText(text.slice(0, 20000) + (text.length > 20000 ? '\n\n... (truncated)' : ''));
         setPreviewKind('text');
         setPreviewUrl(null);
         return;
       }
-      // 3) 图片 / PDF 用 blob URL
       const url = await submissionApi.getPreviewUrl(submissionId);
       previewUrlRef.current = url;
       setPreviewUrl(url);
@@ -167,13 +151,14 @@ export default function ReviewSubmission() {
       <Result
         status="success"
         title="评审已提交"
-        subTitle="正在返回首页…"
+        subTitle="正在返回首页..."
         style={{ background: palette.surface, borderRadius: 14, padding: isMobile ? 24 : 48 }}
       />
     );
   }
 
   const showable = hasFile && (isImage(task.file_name) || isPdf(task.file_name) || isTextLike(task.file_name) || isDocx(task.file_name));
+  const styles = makeStyles(isMobile);
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
@@ -239,15 +224,14 @@ export default function ReviewSubmission() {
               </div>
             </div>
           ) : (
-            <div style={{ color: palette.mute, fontSize: 13 }}>（仅文字内容，无文件）</div>
+            <div style={{ color: palette.mute, fontSize: 13 }}>(no file, text only)</div>
           )}
 
-          {/* 内联预览区 */}
           {(previewKind || previewing) && (
             <div style={styles.previewBox}>
               <div style={styles.previewHead}>
                 <span style={{ fontSize: 12, color: palette.mute }}>
-                  {previewing ? '加载中…' : '预览'}
+                  {previewing ? 'loading...' : 'preview'}
                 </span>
                 <Button
                   size="small"
@@ -287,12 +271,12 @@ export default function ReviewSubmission() {
 
         <div style={styles.section}>
           <div style={styles.sectionLabel}>内容</div>
-          <pre style={styles.content}>{task.content || '（无内容）'}</pre>
+          <pre style={styles.content}>{task.content || '(no content)'}</pre>
         </div>
       </Card>
 
       <Card bordered style={{ ...styles.card, marginTop: 20 }}>
-        <div style={styles.sectionLabel}>本次评分</div>
+        <div style={styles.sectionLabel}>评分</div>
         <div style={styles.scoreRow}>
           <Slider
             min={0} max={100}
@@ -324,7 +308,7 @@ export default function ReviewSubmission() {
   );
 }
 
-const styles = {
+const makeStyles = (isMobile) => ({
   card: { borderRadius: 14, border: `1px solid ${palette.line}` },
   anonRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
   anonLabel: { fontSize: 10, letterSpacing: 2, color: palette.mute, marginBottom: 4 },
@@ -401,4 +385,4 @@ const styles = {
     minWidth: 80,
     textAlign: isMobile ? 'left' : 'right'
   }
-};
+});
