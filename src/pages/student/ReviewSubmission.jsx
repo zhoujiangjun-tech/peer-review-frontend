@@ -18,6 +18,7 @@ import {
 import { reviewApi, submissionApi } from '../../api/index.js';
 import { palette } from '../../theme.js';
 import StatusTag from '../../components/StatusTag.jsx';
+import useResponsive from '../../hooks/useResponsive.js';
 
 function fileIcon(name) {
   if (!name) return <FileTextOutlined />;
